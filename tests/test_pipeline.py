@@ -47,6 +47,10 @@ class Pipeline(unittest.TestCase):
         cls.out = cls.dir / 'out'
         cls.build = run('scripts/build.py', '--source', str(cls.dir / 'world.tif'), '--out', str(cls.out),
                         '--maxzoom', '2', '--tile-size', '256', '--workers', '2')
+        # PNG tiles of the warp itself, without the losses of WebP, for the test of the seam.
+        cls.lossless = cls.dir / 'lossless'
+        cls.build_lossless = run('scripts/build.py', '--source', str(cls.dir / 'world.tif'), '--out', str(cls.lossless),
+                                 '--maxzoom', '2', '--tile-size', '256', '--workers', '2', '--lossless-png')
 
     @classmethod
     def tearDownClass(cls):
@@ -62,6 +66,18 @@ class Pipeline(unittest.TestCase):
         self.assertIn('21 .png tiles', result.stderr)
         self.assertIn('21 .webp tiles', result.stderr)
 
+    def test_png_is_the_webp_decoded(self):
+        for z, x, y in ((0, 0, 0), (2, 3, 1)):
+            tile = self.out / 'ofm/ne2sr' / str(z) / str(x)
+            png = np.asarray(Image.open(tile / f'{y}.png').convert('RGB'))
+            webp = np.asarray(Image.open(tile / f'{y}.webp').convert('RGB'))
+            self.assertTrue(np.array_equal(png, webp), f'{z}/{x}/{y}')
+
+    def test_lossless_build(self):
+        self.assertEqual(self.build_lossless.returncode, 0, self.build_lossless.stderr)
+        result = run('scripts/check.py', '--out', str(self.lossless), '--tile-size', '256', '--lossless-png')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_no_seam_at_180_degrees(self):
         # The synthetic world has no seam at 180 degrees, so the tiles must have none: the last column of the last tile
         # of a row and the first column of its first tile differ no more than the columns next to them. (The rasters of
@@ -69,7 +85,7 @@ class Pipeline(unittest.TestCase):
         for z in range(3):
             n = 1 << z
             for y in range(n):
-                tile = lambda x: np.asarray(Image.open(self.out / 'ofm/ne2sr' / str(z) / str(x) / f'{y}.png')).astype(int)
+                tile = lambda x: np.asarray(Image.open(self.lossless / 'ofm/ne2sr' / str(z) / str(x) / f'{y}.png')).astype(int)
                 last, first = tile(n - 1), tile(0)
                 across = np.abs(last[:, -1] - first[:, 0]).mean()
                 beside = max(np.abs(last[:, -1] - last[:, -2]).mean(), np.abs(first[:, 1] - first[:, 0]).mean())

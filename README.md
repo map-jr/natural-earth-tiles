@@ -5,7 +5,7 @@ antimeridian, built and checked by a GitHub Action and published as GitHub relea
 
 - **`ne2sr.pmtiles`**: one [PMTiles](https://github.com/protomaps/PMTiles) archive of WebP tiles, to host yourself.
 - **`ne2sr-ofm.tar.gz`**: the same tiles as files, as PNG and WebP, in the layout of the `natural_earth` asset of
-  [OpenFreeMap](https://openfreemap.org/), so that it can take the place of that asset as it is.
+  [OpenFreeMap](https://openfreemap.org/), and made the same way, so that it can take the place of that asset as it is.
 
 The tiles of OpenFreeMap (`https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png`) have a column of
 transparent pixels at 180 degrees, at zooms 0, 1, 3 and 5, and a transparent last row at about 85° S at zooms 4 and 6.
@@ -33,10 +33,14 @@ server or a PMTiles server).
 | Projection | Web Mercator (EPSG:3857), 85.0511° N to 85.0511° S, the usual XYZ tile scheme |
 | Zooms | 0 to 6: 5,461 tiles |
 | Tile size | 512 x 512 pixels |
-| PNG | Lossless RGB |
-| WebP | Lossy RGB, quality 80 |
+| WebP | Lossy RGB, quality 70 |
+| PNG | RGB: the WebP tiles decoded, so a map gets the same pixels from either format |
 | PMTiles | The WebP tiles |
-| Sizes | `ne2sr.pmtiles` 25 MB (WebP); `ne2sr-ofm.tar.gz` 653 MB (627 MB of PNG, 26 MB of WebP) |
+| Sizes | `ne2sr.pmtiles` 19 MB; `ne2sr-ofm.tar.gz` 351 MB (336 MB of PNG, 20 MB of WebP), where the asset of OpenFreeMap has 328 MB (314 MB and 20 MB) |
+
+The PNG and WebP tiles are made as those of OpenFreeMap are: its `.webp` tiles are lossy WebP, and its `.png` tiles
+have exactly their pixels. At WebP quality 70 the tiles here are about the size of those of OpenFreeMap. PNG tiles of
+the warp itself, without the losses of WebP, are about twice the size: `build.py --lossless-png` makes them.
 
 Zoom 6 is warped from the source with cubic resampling. At 512 pixels a tile of zoom 6 has about 1.2 km per pixel at
 the equator, a little finer than the source (about 1.85 km), so a higher zoom would add no detail: a map draws zoom 6
@@ -93,7 +97,8 @@ python scripts/check.py --out work/out
 `fetch.py` downloads the zip of Natural Earth, stops when its SHA-256 is not the one in `sources.json`, and unzips the
 GeoTIFF. `build.py` writes `work/out/ofm/ne2sr/`, `ne2sr.pmtiles` and `ne2sr.build.json`; it takes about 15 minutes
 on 4 cores, most of it in encoding the tiles. `check.py` checks every tile: each is there, is 512 x 512 pixels and
-opaque, and the PMTiles archive holds the WebP tiles. It also checks any folder of tiles in the same layout:
+opaque, each PNG tile has the pixels of its WebP tile, and the PMTiles archive holds the WebP tiles. It also checks any
+folder of tiles in the same layout:
 
 ```bash
 python scripts/check.py --folder path/to/ofm/ne2sr --maxzoom 6 --no-pmtiles

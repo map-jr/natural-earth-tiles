@@ -4,8 +4,8 @@
 
 Writes, under --out:
 
-    ofm/<name>/{z}/{x}/{y}.png    lossless, in the layout of the natural_earth asset of OpenFreeMap
-    ofm/<name>/{z}/{x}/{y}.webp   lossy, the same tiles
+    ofm/<name>/{z}/{x}/{y}.webp   lossy WebP, in the layout of the natural_earth asset of OpenFreeMap
+    ofm/<name>/{z}/{x}/{y}.png    the WebP tiles decoded, as PNG
     <name>.pmtiles                the WebP tiles as one PMTiles archive
     <name>.build.json             the settings and the versions of the tools
 
@@ -16,11 +16,18 @@ source is first padded with --pad columns from its other side (the image wraps a
 real pixels on both sides of the antimeridian. A band of 255 is warped with the image: the build stops when any pixel
 of the result has less than full coverage. scripts/check.py then checks the tiles themselves.
 
+The PNG tiles have the pixels of the WebP tiles, as in the asset of OpenFreeMap (whose PNG tiles are its lossy WebP
+tiles decoded): a map has the same tiles in either format, and the PNG tiles are about the size of those of
+OpenFreeMap, about half the size of lossless PNG tiles of the warp. --lossless-png makes the PNG tiles of the warp
+itself, without the WebP step. WebP quality 70 gives tiles of about the size of
+those of OpenFreeMap.
+
 The highest zoom is warped from the source (cubic). Each lower zoom is the average of 2 x 2 pixels of the zoom above,
 over the whole world, so a tile at a lower zoom is the same as the four tiles under it, without seams.
 """
 
 import argparse
+import io
 import json
 import math
 import os
@@ -49,7 +56,8 @@ def parse_args(argv=None):
     p.add_argument('--maxzoom', type=int, default=6)
     p.add_argument('--tile-size', type=int, default=512)
     p.add_argument('--pad', type=int, default=16, help='columns of the source wrapped around each side')
-    p.add_argument('--webp-quality', type=int, default=80)
+    p.add_argument('--webp-quality', type=int, default=70)
+    p.add_argument('--lossless-png', action='store_true', help='PNG tiles of the warp itself, not of the WebP tiles')
     p.add_argument('--workers', type=int, default=os.cpu_count())
     return p.parse_args(argv)
 
@@ -87,21 +95,26 @@ def halve(a: np.ndarray) -> np.ndarray:
     return ((s + 2) >> 2).astype(np.uint8)
 
 
-def write_tile(folder: str, z: int, x: int, y: int, rgb: np.ndarray, webp_quality: int) -> None:
+def write_tile(folder: str, z: int, x: int, y: int, rgb: np.ndarray, webp_quality: int, lossless_png: bool) -> None:
     d = Path(folder) / str(z) / str(x)
     d.mkdir(parents=True, exist_ok=True)
-    image = Image.fromarray(rgb, 'RGB')
-    image.save(d / f'{y}.png', 'PNG', optimize=True)
-    image.save(d / f'{y}.webp', 'WEBP', quality=webp_quality, method=6)
+    webp = io.BytesIO()
+    Image.fromarray(rgb, 'RGB').save(webp, 'WEBP', quality=webp_quality, method=6)
+    (d / f'{y}.webp').write_bytes(webp.getvalue())
+    if lossless_png:
+        Image.fromarray(rgb, 'RGB').save(d / f'{y}.png', 'PNG', optimize=True)
+    else:
+        with Image.open(webp) as decoded:
+            decoded.convert('RGB').save(d / f'{y}.png', 'PNG', optimize=True)
 
 
-def write_tiles(pool, folder, z, row0, image, tile_size, webp_quality):
+def write_tiles(pool, folder, z, row0, image, tile_size, webp_quality, lossless_png):
     """Write each tile of `image`, a band of rows of zoom z whose first tile row is row0."""
     futures = []
     for ty in range(image.shape[0] // tile_size):
         for tx in range(image.shape[1] // tile_size):
             tile = image[ty * tile_size : (ty + 1) * tile_size, tx * tile_size : (tx + 1) * tile_size]
-            futures.append(pool.submit(write_tile, folder, z, tx, row0 + ty, np.ascontiguousarray(tile), webp_quality))
+            futures.append(pool.submit(write_tile, folder, z, tx, row0 + ty, np.ascontiguousarray(tile), webp_quality, lossless_png))
     for f in futures:
         f.result()
 
@@ -139,7 +152,7 @@ def build(args) -> None:
                 sys.exit(f'Rows {row0} to {row0 + band_rows} of zoom {args.maxzoom}: {uncovered} pixels are not covered by the source')
 
             image = np.ascontiguousarray(np.moveaxis(dst[:3], 0, -1))
-            write_tiles(pool, folder, args.maxzoom, row0 // ts, image, ts, args.webp_quality)
+            write_tiles(pool, folder, args.maxzoom, row0 // ts, image, ts, args.webp_quality, args.lossless_png)
 
             z, r = args.maxzoom, row0
             while z > 0:
@@ -150,7 +163,7 @@ def build(args) -> None:
 
         for z in range(args.maxzoom - 1, -1, -1):
             print(f'  zoom {z}', file=sys.stderr)
-            write_tiles(pool, folder, z, 0, lower.pop(z), ts, args.webp_quality)
+            write_tiles(pool, folder, z, 0, lower.pop(z), ts, args.webp_quality, args.lossless_png)
 
     write_pmtiles(args, folder, out / f'{args.name}.pmtiles')
 
@@ -165,6 +178,7 @@ def build(args) -> None:
                 'pad': args.pad,
                 'resampling': 'cubic warp to the highest zoom, 2x2 average for each lower zoom',
                 'webp_quality': args.webp_quality,
+                'png': 'lossless' if args.lossless_png else 'the WebP tiles decoded',
                 'tools': {
                     'rasterio': rasterio.__version__,
                     'gdal': rasterio.__gdal_version__,

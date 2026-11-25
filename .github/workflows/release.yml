@@ -1,7 +1,7 @@
 # Builds the tiles from the Natural Earth raster, checks them, and makes the release v<version> on GitHub with:
 #
 # - ne2sr.pmtiles: the WebP tiles as one PMTiles archive
-# - ne2sr-ofm.tar.gz: ofm/ne2sr/{z}/{x}/{y}.png and .webp, the layout of the natural_earth asset of OpenFreeMap
+# - ne2sr-ofm.tar.gz: ofm/ne2sr/{z}/{x}/{y}.webp and .png (the WebP decoded), as the natural_earth asset of OpenFreeMap
 # - ne2sr.build.json: the settings and the versions of the tools
 # - SHA256SUMS
 #

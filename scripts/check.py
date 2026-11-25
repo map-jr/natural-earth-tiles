@@ -8,6 +8,7 @@ Fails when:
 - a tile of zoom 0 to --maxzoom is missing, or is not a square image of --tile-size pixels;
 - any pixel of a tile is less than opaque (a tile with an alpha band must have 255 everywhere): the fault of the tiles
   of OpenFreeMap, which have a transparent column at 180 degrees and a transparent row at the bottom;
+- a PNG tile does not have the pixels of its WebP tile (the PNG tiles are the WebP tiles decoded);
 - the PMTiles archive does not hold exactly the WebP tiles of the folder, with the zooms and type it should have.
 """
 
@@ -48,6 +49,18 @@ def check_folder(folder: Path, maxzoom: int, tile_size: int, ext: str, errors: l
     return count
 
 
+def check_same_pixels(folder: Path, maxzoom: int, errors: list) -> None:
+    for z in range(maxzoom + 1):
+        for x in range(1 << z):
+            for y in range(1 << z):
+                png, webp = (folder / str(z) / str(x) / f'{y}.{ext}' for ext in ('png', 'webp'))
+                if not (png.is_file() and webp.is_file()):
+                    continue
+                with Image.open(png) as a, Image.open(webp) as b:
+                    if not np.array_equal(np.asarray(a.convert('RGB')), np.asarray(b.convert('RGB'))):
+                        errors.append(f'{png}: not the pixels of {webp.name}')
+
+
 def check_pmtiles(path: Path, folder: Path, maxzoom: int, errors: list) -> None:
     from pmtiles.reader import MmapSource, Reader
     from pmtiles.tile import TileType
@@ -79,6 +92,7 @@ def main(argv=None) -> None:
     p.add_argument('--tile-size', type=int, default=512)
     p.add_argument('--ext', action='append', help='png, webp (default: both)')
     p.add_argument('--no-pmtiles', action='store_true')
+    p.add_argument('--lossless-png', action='store_true', help='a build with --lossless-png: the PNG and WebP tiles differ')
     args = p.parse_args(argv)
 
     if args.out:
@@ -100,6 +114,8 @@ def main(argv=None) -> None:
     for ext in args.ext or ['png', 'webp']:
         count = check_folder(folder, args.maxzoom, args.tile_size, ext, errors)
         print(f'{folder}: {count} .{ext} tiles, zooms 0 to {args.maxzoom}', file=sys.stderr)
+    if not args.ext and not args.lossless_png:
+        check_same_pixels(folder, args.maxzoom, errors)
     if not args.no_pmtiles:
         check_pmtiles(Path(args.out) / f'{args.name}.pmtiles', folder, args.maxzoom, errors)
 
