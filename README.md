@@ -36,11 +36,13 @@ server or a PMTiles server).
 | WebP | Lossy RGB, quality 70 |
 | PNG | RGB: the WebP tiles decoded, so a map gets the same pixels from either format |
 | PMTiles | The WebP tiles |
-| Sizes | `ne2sr.pmtiles` 19 MB; `ne2sr-ofm.tar.gz` 351 MB (336 MB of PNG, 20 MB of WebP), where the asset of OpenFreeMap has 328 MB (314 MB and 20 MB) |
+| Sizes | `ne2sr.pmtiles` 19 MB; `ne2sr-ofm.tar.gz` 308 MB (289 MB of PNG, 20 MB of WebP), where the asset of OpenFreeMap has 328 MB (314 MB and 20 MB) |
 
 The PNG and WebP tiles are made as those of OpenFreeMap are: its `.webp` tiles are lossy WebP, and its `.png` tiles
-have exactly their pixels. At WebP quality 70 the tiles here are about the size of those of OpenFreeMap. PNG tiles of
-the warp itself, without the losses of WebP, are about twice the size: `build.py --lossless-png` makes them.
+have exactly their pixels. At WebP quality 70 the WebP tiles here are about the size of those of OpenFreeMap. Each PNG
+tile is compressed again by [oxipng](https://github.com/oxipng/oxipng) (level 4), without a change of a pixel, so the
+PNG tiles are about 8% smaller than those of OpenFreeMap. PNG tiles of the warp itself, without the losses of WebP, are
+about twice the size: `build.py --lossless-png` makes them.
 
 Zoom 6 is warped from the source with cubic resampling. At 512 pixels a tile of zoom 6 has about 1.2 km per pixel at
 the equator, a little finer than the source (about 1.85 km), so a higher zoom would add no detail: a map draws zoom 6
@@ -95,7 +97,7 @@ python scripts/check.py --out work/out
 ```
 
 `fetch.py` downloads the zip of Natural Earth, stops when its SHA-256 is not the one in `sources.json`, and unzips the
-GeoTIFF. `build.py` writes `work/out/ofm/ne2sr/`, `ne2sr.pmtiles` and `ne2sr.build.json`; it takes about 15 minutes
+GeoTIFF. `build.py` writes `work/out/ofm/ne2sr/`, `ne2sr.pmtiles` and `ne2sr.build.json`; it takes about 25 minutes
 on 4 cores, most of it in encoding the tiles. `check.py` checks every tile: each is there, is 512 x 512 pixels and
 opaque, each PNG tile has the pixels of its WebP tile, and the PMTiles archive holds the WebP tiles. It also checks any
 folder of tiles in the same layout:
