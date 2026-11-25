@@ -1,0 +1,10 @@
+{
+  "ne2sr": {
+    "title": "Natural Earth II with Shaded Relief (1:10m)",
+    "url": "https://naciscdn.org/naturalearth/10m/raster/NE2_HR_LC_SR.zip",
+    "sha256": "f2d35ced308b09b55677471a78a48c431be9c06d77eedfa80e81c2942348bf88",
+    "size": 201828386,
+    "tif": "NE2_HR_LC_SR.tif",
+    "version": "2.0.0"
+  }
+}

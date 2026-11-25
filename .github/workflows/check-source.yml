@@ -1,0 +1,19 @@
+# Once a month, downloads the Natural Earth raster and compares its SHA-256 with sources.json. The run fails when
+# Natural Earth has changed the file: then check the new file, update sources.json and make a new release.
+name: Check source
+on:
+  schedule:
+    - cron: '17 6 3 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python scripts/fetch.py ne2sr "$RUNNER_TEMP/src"
